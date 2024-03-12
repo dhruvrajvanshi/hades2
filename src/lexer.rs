@@ -2,6 +2,7 @@ use core::panic;
 use std::{collections::HashMap, path::PathBuf, rc::Rc, str::Chars};
 
 use lazy_static::lazy_static;
+use libsyntax::{HasSpan, Span};
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum TokenKind {
@@ -22,8 +23,13 @@ pub enum TokenKind {
 #[derive(Debug)]
 pub struct Token {
     pub kind: TokenKind,
-    pub start_position: usize,
+    pub span: Span,
     pub text: String,
+}
+impl HasSpan for Token {
+    fn span(&self) -> &Span {
+        &self.span
+    }
 }
 
 lazy_static! {
@@ -111,7 +117,10 @@ impl<'chars> Lexer<'chars> {
         let text = std::mem::replace(&mut self.lexeme, String::new());
         Token {
             kind,
-            start_position: self.position - text.len(),
+            span: Span {
+                start: self.position - text.len(),
+                end: self.position,
+            },
             text,
         }
     }
@@ -176,7 +185,7 @@ mod test {
         let token = lexer.next_token();
 
         assert_eq!(token.kind, TokenKind::EOF);
-        assert_eq!(token.start_position, 4);
+        assert_eq!(token.start(), 4);
     }
 
     #[test]
@@ -188,7 +197,7 @@ mod test {
 
         assert_eq!(token.text, "fn");
         assert_eq!(token.kind, TokenKind::FN);
-        assert_eq!(token.start_position, 2);
+        assert_eq!(token.start(), 2);
 
         token = lexer.next_token();
 
