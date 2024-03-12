@@ -1,4 +1,4 @@
-workspace = { members = ["libsyntax"] }
+workspace = { members = ["libsyntax", "libsyntax_derive"] }
 [package]
 name = "hades-lang"
 version = "0.1.0"
@@ -11,3 +11,4 @@ lazy_static = "1.4.0"
 ron = "0.8.1"
 serde = { version = "1.0.197", features = ["derive"] }
 libsyntax = { path = "./libsyntax" }
+libsyntax_derive = { path = "./libsyntax_derive" }

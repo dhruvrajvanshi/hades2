@@ -2,7 +2,8 @@ use core::panic;
 use std::{collections::HashMap, path::PathBuf, rc::Rc, str::Chars};
 
 use lazy_static::lazy_static;
-use libsyntax::{HasSpan, Span};
+use libsyntax::Span;
+use libsyntax_derive::HasSpan;
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum TokenKind {
@@ -20,16 +21,11 @@ pub enum TokenKind {
 
     EOF,
 }
-#[derive(Debug)]
+#[derive(Debug, HasSpan)]
 pub struct Token {
     pub kind: TokenKind,
     pub span: Span,
     pub text: String,
-}
-impl HasSpan for Token {
-    fn span(&self) -> &Span {
-        &self.span
-    }
 }
 
 lazy_static! {
@@ -164,6 +160,8 @@ fn is_ident_char(c: char) -> bool {
 
 #[cfg(test)]
 mod test {
+    use libsyntax::HasSpan;
+
     use super::*;
 
     #[test]
