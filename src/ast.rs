@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+use libsyntax::Meta;
+use libsyntax_derive::HasMeta;
 use serde::Serialize;
 
 #[derive(Debug, Serialize)]
@@ -10,22 +12,22 @@ pub struct SourceFile {
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Serialize)]
 pub struct NodeId(pub usize);
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, HasMeta)]
 pub struct Item {
-    pub id: NodeId,
+    pub meta: Meta,
     pub kind: ItemKind,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, HasMeta)]
 pub struct Fn {
-    pub id: NodeId,
+    pub meta: Meta,
     pub name: String,
     pub body: Expr,
     pub return_ty: Option<Ty>,
 }
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, HasMeta)]
 pub struct Expr {
-    pub id: NodeId,
+    pub meta: Meta,
     pub kind: ExprKind,
 }
 #[derive(Debug, Serialize)]

@@ -18,3 +18,18 @@ pub fn derive_has_span(item: TokenStream) -> TokenStream {
     }
     .into()
 }
+
+#[proc_macro_derive(HasMeta)]
+pub fn derive_has_meta(item: TokenStream) -> TokenStream {
+    let DeriveInput { ident, .. } = parse_macro_input!(item as DeriveInput);
+
+    quote! {
+        #[automatically_derived]
+        impl libsyntax::HasMeta for #ident {
+            fn meta(&self) -> &libsyntax::Meta {
+                &self.meta
+            }
+        }
+    }
+    .into()
+}

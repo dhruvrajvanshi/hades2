@@ -11,6 +11,7 @@ pub struct Parser<'text> {
     tokens: TokenBuffer<'text>,
 }
 
+use libsyntax::{Meta, Span};
 use TokenKind as t;
 impl<'text> Parser<'text> {
     pub fn new(text: &'text str, path: PathBuf) -> Self {
@@ -36,16 +37,19 @@ impl<'text> Parser<'text> {
     fn parse_item(&mut self) -> Item {
         use t::*;
         match self.current_kind() {
-            FN => Item {
-                id: self.node_id(),
-                kind: ItemKind::Fn(Box::new(self.parse_fn())),
-            },
+            FN => {
+                let func = self.parse_fn();
+                Item {
+                    meta: func.meta,
+                    kind: ItemKind::Fn(Box::new(func)),
+                }
+            }
             _ => todo!(),
         }
     }
 
     fn parse_fn(&mut self) -> Fn {
-        self.expect(TokenKind::FN, "Trying to parse function");
+        let start = self.expect(TokenKind::FN, "Trying to parse function");
         let name = self.expect(TokenKind::IDENT, "fn [name]").text;
         self.expect(TokenKind::LPAREN, "Expected parameter list start");
         self.expect(TokenKind::RPAREN, "Expected parameter list end");
@@ -57,7 +61,9 @@ impl<'text> Parser<'text> {
         };
         let body = self.parse_block();
         Fn {
-            id: self.node_id(),
+            meta: Meta {
+                span: Span::between(&start, &body),
+            },
             name,
             body,
             return_ty,
@@ -65,18 +71,20 @@ impl<'text> Parser<'text> {
     }
 
     fn parse_block(&mut self) -> Expr {
-        self.expect(TokenKind::LBRACE, "Trying to parse block");
+        let start = self.expect(TokenKind::LBRACE, "Trying to parse block");
         let mut stmts = vec![];
         while self.current_kind() != TokenKind::RBRACE && !self.eof() {
             stmts.push(self.parse_stmt());
         }
 
-        self.expect(
+        let end = self.expect(
             TokenKind::RBRACE,
             "Unexpected end of file while looking for block terminator",
         );
         Expr {
-            id: self.node_id(),
+            meta: Meta {
+                span: Span::between(&start, &end),
+            },
             kind: ExprKind::Block(Block {
                 id: self.node_id(),
                 stmts,
@@ -95,10 +103,12 @@ impl<'text> Parser<'text> {
     fn parse_expr(&mut self) -> Expr {
         match self.current_kind() {
             TokenKind::LPAREN => {
-                self.advance();
-                self.expect(TokenKind::RPAREN, "Trying to parse unit expression");
+                let start = self.advance();
+                let end = self.expect(TokenKind::RPAREN, "Trying to parse unit expression");
                 Expr {
-                    id: self.node_id(),
+                    meta: Meta {
+                        span: Span::between(&start, &end),
+                    },
                     kind: ExprKind::Unit,
                 }
             }

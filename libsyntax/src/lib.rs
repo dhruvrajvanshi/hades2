@@ -26,3 +26,16 @@ impl Span {
         }
     }
 }
+
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct Meta {
+    pub span: Span,
+}
+pub trait HasMeta {
+    fn meta(&self) -> &Meta;
+}
+impl<T: HasMeta> HasSpan for T {
+    fn span(&self) -> &Span {
+        &self.meta().span
+    }
+}
