@@ -1,8 +1,11 @@
+pub mod visit;
 use std::path::PathBuf;
 
 use libsyntax::Meta;
 use libsyntax_derive::HasMeta;
 use serde::Serialize;
+
+pub type Ident = String;
 
 #[derive(Debug, Serialize)]
 pub struct SourceFile {
@@ -16,12 +19,19 @@ pub struct NodeId(pub usize);
 pub struct Item {
     pub meta: Meta,
     pub kind: ItemKind,
+    pub visibility: Visibility,
+    pub name: Ident,
+}
+
+#[derive(Debug, Serialize)]
+pub enum Visibility {
+    Public,
+    Inherited,
 }
 
 #[derive(Debug, Serialize, HasMeta)]
 pub struct Fn {
     pub meta: Meta,
-    pub name: String,
     pub body: Expr,
     pub return_ty: Option<Ty>,
 }
@@ -33,29 +43,60 @@ pub struct Expr {
 #[derive(Debug, Serialize)]
 pub enum ExprKind {
     Block(Block),
+    Lit(Lit),
+    Var(Var),
     Unit,
 }
 
 #[derive(Debug, Serialize)]
+pub struct Var {
+    pub name: Ident,
+}
+
+#[derive(Debug, Serialize)]
+pub struct Lit {
+    pub kind: LitKind,
+    pub text: String,
+}
+
+#[derive(Debug, Serialize)]
+pub enum LitKind {
+    Integer,
+}
+
+#[derive(Debug, Serialize, HasMeta)]
 pub struct Block {
-    pub id: NodeId,
+    pub meta: Meta,
     pub stmts: Vec<Stmt>,
 }
 
 #[derive(Debug, Serialize)]
 pub enum ItemKind {
     Fn(Box<Fn>),
+    ForeignMod(ForeignMod),
 }
 
 #[derive(Debug, Serialize)]
+pub struct ForeignMod {
+    pub items: Vec<ForeignItem>,
+    pub vis: Visibility,
+}
+
+#[derive(Debug, Serialize, HasMeta)]
+pub struct ForeignItem {
+    pub meta: Meta,
+}
+
+#[derive(Debug, Serialize, HasMeta)]
 pub struct Stmt {
-    pub id: NodeId,
+    pub meta: Meta,
     pub kind: StmtKind,
 }
 
 #[derive(Debug, Serialize)]
 pub enum StmtKind {
     Item(Item),
+    Semi,
     Expr(Box<Expr>),
 }
 

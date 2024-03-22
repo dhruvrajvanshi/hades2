@@ -7,14 +7,21 @@ use libsyntax_derive::HasSpan;
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum TokenKind {
-    FN,
     IDENT,
+    INT,
+
+    // Keyworkds
+    FN,
+    PUB,
+    EXTERN,
+    UNSAFE,
 
     // Punctuation
     LPAREN,
     RPAREN,
     LBRACE,
     RBRACE,
+    SEMI,
 
     // Non punctuation Operators
     ARROW,
@@ -31,7 +38,12 @@ pub struct Token {
 lazy_static! {
     static ref TOKEN_KINDS: HashMap<&'static str, TokenKind> = {
         let mut m = HashMap::new();
-        m.insert("fn", TokenKind::FN);
+        use TokenKind::*;
+        let mut i = |k, v| m.insert(k, v);
+        i("fn", FN);
+        i("pub", PUB);
+        i("extern", EXTERN);
+        i("unsafe", UNSAFE);
         m
     };
 }
@@ -40,11 +52,12 @@ lazy_static! {
     static ref SINGLE_CHAR_TOKENS: HashMap<char, TokenKind> = {
         let mut m = HashMap::new();
         let mut i = |k, v| m.insert(k, v);
-        use TokenKind as t;
-        i('(', t::LPAREN);
-        i(')', t::RPAREN);
-        i('{', t::LBRACE);
-        i('}', t::RBRACE);
+        use TokenKind::*;
+        i('(', LPAREN);
+        i(')', RPAREN);
+        i('{', LBRACE);
+        i('}', RBRACE);
+        i(';', SEMI);
         m
     };
 }
@@ -56,6 +69,8 @@ pub(crate) struct Lexer<'chars> {
     lexeme: String,
     _path: Rc<PathBuf>,
     position: usize,
+    line: usize,
+    column: usize,
 }
 impl<'chars> Lexer<'chars> {
     pub fn new(text: &'chars str, path: PathBuf) -> Self {
@@ -67,7 +82,16 @@ impl<'chars> Lexer<'chars> {
             _path: Rc::new(path),
             lexeme: String::new(),
             position: 0,
+            line: 1,
+            column: 1,
         }
+    }
+
+    pub fn line(&self) -> usize {
+        self.line
+    }
+    pub fn column(&self) -> usize {
+        self.column
     }
 
     pub fn next_token(&mut self) -> Token {
@@ -80,6 +104,7 @@ impl<'chars> Lexer<'chars> {
                 self.expect('>', "Expected `>` after `-`");
                 self.make_token(TokenKind::ARROW)
             }
+            c if c.is_digit(10) => self.integer(),
             c if is_ident_starter(c) => self.ident_or_keyword(),
             c if SINGLE_CHAR_TOKENS.contains_key(&c) => {
                 self.advance();
@@ -89,8 +114,21 @@ impl<'chars> Lexer<'chars> {
                         .expect("Should not panic because of `contains_key` check above"),
                 )
             }
-            c => todo!("Unexpected character: {}", c),
+            c => todo!(
+                "Unexpected character at line: {}:{}: '{}'",
+                self.line,
+                self.column,
+                c
+            ),
         }
+    }
+
+    fn integer(&mut self) -> Token {
+        assert!(self.current_char.is_digit(10));
+        while self.current_char.is_digit(10) {
+            self.advance();
+        }
+        self.make_token(TokenKind::INT)
     }
 
     fn ident_or_keyword(&mut self) -> Token {
@@ -137,6 +175,12 @@ impl<'chars> Lexer<'chars> {
         self.current_char = self.text.next().unwrap_or('\0');
         self.lexeme.push(current_char);
         self.position += 1;
+        if current_char == '\n' {
+            self.line += 1;
+            self.column = 1;
+        } else {
+            self.column += 1;
+        }
         current_char
     }
     fn expect(&mut self, c: char, message: &str) -> char {

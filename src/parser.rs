@@ -2,7 +2,8 @@ use std::array;
 use std::{path::PathBuf, rc::Rc};
 
 use crate::ast::{
-    Block, Expr, ExprKind, Fn, Item, ItemKind, NodeId, SourceFile, Stmt, StmtKind, Ty, TyKind,
+    Block, Expr, ExprKind, Fn, Ident, Item, ItemKind, NodeId, SourceFile, Stmt, StmtKind, Ty,
+    TyKind, Var, Visibility,
 };
 use crate::lexer::{Lexer, Token, TokenKind};
 
@@ -11,7 +12,7 @@ pub struct Parser<'text> {
     tokens: TokenBuffer<'text>,
 }
 
-use libsyntax::{Meta, Span};
+use libsyntax::{HasSpan, Meta, Span};
 use TokenKind as t;
 impl<'text> Parser<'text> {
     pub fn new(text: &'text str, path: PathBuf) -> Self {
@@ -36,11 +37,14 @@ impl<'text> Parser<'text> {
 
     fn parse_item(&mut self) -> Item {
         use t::*;
+        let visibility = self.parse_visibility();
         match self.current_kind() {
             FN => {
-                let func = self.parse_fn();
+                let (func, name) = self.parse_fn();
                 Item {
                     meta: func.meta,
+                    name,
+                    visibility,
                     kind: ItemKind::Fn(Box::new(func)),
                 }
             }
@@ -48,7 +52,17 @@ impl<'text> Parser<'text> {
         }
     }
 
-    fn parse_fn(&mut self) -> Fn {
+    fn parse_visibility(&mut self) -> Visibility {
+        match self.current_kind() {
+            t::PUB => {
+                self.advance();
+                Visibility::Public
+            }
+            _ => Visibility::Inherited,
+        }
+    }
+
+    fn parse_fn(&mut self) -> (Fn, Ident) {
         let start = self.expect(TokenKind::FN, "Trying to parse function");
         let name = self.expect(TokenKind::IDENT, "fn [name]").text;
         self.expect(TokenKind::LPAREN, "Expected parameter list start");
@@ -59,18 +73,20 @@ impl<'text> Parser<'text> {
         } else {
             None
         };
-        let body = self.parse_block();
-        Fn {
-            meta: Meta {
-                span: Span::between(&start, &body),
+        let body = self.parse_block_expr();
+        (
+            Fn {
+                meta: Meta {
+                    span: Span::between(&start, &body),
+                },
+                body,
+                return_ty,
             },
             name,
-            body,
-            return_ty,
-        }
+        )
     }
 
-    fn parse_block(&mut self) -> Expr {
+    fn parse_block(&mut self) -> Block {
         let start = self.expect(TokenKind::LBRACE, "Trying to parse block");
         let mut stmts = vec![];
         while self.current_kind() != TokenKind::RBRACE && !self.eof() {
@@ -81,27 +97,50 @@ impl<'text> Parser<'text> {
             TokenKind::RBRACE,
             "Unexpected end of file while looking for block terminator",
         );
-        Expr {
+        Block {
             meta: Meta {
                 span: Span::between(&start, &end),
             },
-            kind: ExprKind::Block(Block {
-                id: self.node_id(),
-                stmts,
-            }),
+            stmts,
+        }
+    }
+
+    fn parse_block_expr(&mut self) -> Expr {
+        let block = self.parse_block();
+        Expr {
+            meta: Meta {
+                span: *block.span(),
+            },
+            kind: ExprKind::Block(block),
         }
     }
 
     fn parse_stmt(&mut self) -> Stmt {
+        if self.current_kind() == TokenKind::SEMI {
+            let tok = self.advance();
+            return Stmt {
+                meta: Meta { span: *tok.span() },
+                kind: StmtKind::Semi,
+            };
+        }
         let expr = self.parse_expr();
         Stmt {
-            id: self.node_id(),
+            meta: Meta { span: *expr.span() },
             kind: StmtKind::Expr(Box::new(expr)),
         }
     }
 
     fn parse_expr(&mut self) -> Expr {
         match self.current_kind() {
+            TokenKind::IDENT => {
+                let token = self.advance();
+                Expr {
+                    meta: Meta {
+                        span: *token.span(),
+                    },
+                    kind: ExprKind::Var(Var { name: token.text }),
+                }
+            }
             TokenKind::LPAREN => {
                 let start = self.advance();
                 let end = self.expect(TokenKind::RPAREN, "Trying to parse unit expression");
@@ -112,7 +151,17 @@ impl<'text> Parser<'text> {
                     kind: ExprKind::Unit,
                 }
             }
-            _ => todo!(),
+            TokenKind::UNSAFE => {
+                let start = self.advance();
+                let block = self.parse_block();
+                Expr {
+                    meta: Meta {
+                        span: Span::between(&start, &block),
+                    },
+                    kind: ExprKind::Block(block),
+                }
+            }
+            _ => todo!("Unexpected token while parsing expression"),
         }
     }
 
@@ -137,8 +186,8 @@ impl<'text> Parser<'text> {
         let token = self.advance();
         if token.kind != kind {
             panic!(
-                "Parse error: {}\nExpected: {:?}; Found: '{}';\nTokenBuffer: {:?}",
-                message, kind, token.text, self.tokens
+                "Parse error: {}\nExpected: {:?}; Found: '{}' ({:?});",
+                message, kind, token.text, token.kind
             )
         }
         token
