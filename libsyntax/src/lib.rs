@@ -26,6 +26,11 @@ impl Span {
         }
     }
 }
+impl HasSpan for Span {
+    fn span(&self) -> &Span {
+        self
+    }
+}
 
 #[derive(Debug, Clone, Copy, Serialize)]
 pub struct Meta {

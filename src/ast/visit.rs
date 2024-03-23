@@ -39,8 +39,12 @@ pub fn walk_expr(visitor: &mut impl Visitor, expr: &Expr) {
     match &expr.kind {
         E::Block(block) => visitor.visit_block(block),
         E::Unit => (),
-        E::Lit(_) => todo!(),
-        E::Var(_) => todo!(),
+        E::Lit(_) => (),
+        E::Var(_) => (),
+        E::Call(callee, args) => {
+            visitor.visit_expr(callee);
+            walk_list!(visitor, visit_expr, args);
+        }
     }
 }
 
@@ -66,5 +70,7 @@ pub fn walk_stmt(visitor: &mut impl Visitor, stmt: &Stmt) {
 }
 
 pub fn walk_fn(visitor: &mut impl Visitor, f: &Fn) {
-    visitor.visit_expr(&f.body);
+    if let Some(body) = &f.body {
+        visitor.visit_expr(body);
+    }
 }

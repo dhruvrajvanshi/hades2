@@ -19,7 +19,7 @@ pub struct NodeId(pub usize);
 pub struct Item {
     pub meta: Meta,
     pub kind: ItemKind,
-    pub visibility: Visibility,
+    pub vis: Visibility,
     pub name: Ident,
 }
 
@@ -32,9 +32,18 @@ pub enum Visibility {
 #[derive(Debug, Serialize, HasMeta)]
 pub struct Fn {
     pub meta: Meta,
-    pub body: Expr,
+    pub params: Vec<Param>,
+    pub body: Option<Box<Expr>>,
     pub return_ty: Option<Ty>,
 }
+
+#[derive(Debug, Serialize, HasMeta)]
+pub struct Param {
+    pub meta: Meta,
+    pub name: Ident,
+    pub ty: Ty,
+}
+
 #[derive(Debug, Serialize, HasMeta)]
 pub struct Expr {
     pub meta: Meta,
@@ -43,6 +52,7 @@ pub struct Expr {
 #[derive(Debug, Serialize)]
 pub enum ExprKind {
     Block(Block),
+    Call(Box<Expr>, Vec<Expr>),
     Lit(Lit),
     Var(Var),
     Unit,
@@ -79,12 +89,19 @@ pub enum ItemKind {
 #[derive(Debug, Serialize)]
 pub struct ForeignMod {
     pub items: Vec<ForeignItem>,
-    pub vis: Visibility,
 }
 
 #[derive(Debug, Serialize, HasMeta)]
 pub struct ForeignItem {
     pub meta: Meta,
+    pub name: Ident,
+    pub vis: Visibility,
+    pub kind: ForeignItemKind,
+}
+
+#[derive(Debug, Serialize)]
+pub enum ForeignItemKind {
+    Fn(Fn),
 }
 
 #[derive(Debug, Serialize, HasMeta)]
@@ -100,12 +117,14 @@ pub enum StmtKind {
     Expr(Box<Expr>),
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, HasMeta)]
 pub struct Ty {
-    pub id: NodeId,
+    pub meta: Meta,
     pub kind: TyKind,
 }
+
 #[derive(Debug, Serialize)]
 pub enum TyKind {
-    Unit,
+    Tup(Vec<Ty>),
+    Var(Ident),
 }

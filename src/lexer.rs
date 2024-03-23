@@ -25,6 +25,8 @@ pub enum TokenKind {
 
     // Non punctuation Operators
     ARROW,
+    COLON,
+    COLONCOLON,
 
     EOF,
 }
@@ -103,6 +105,15 @@ impl<'chars> Lexer<'chars> {
                 self.advance();
                 self.expect('>', "Expected `>` after `-`");
                 self.make_token(TokenKind::ARROW)
+            }
+            ':' => {
+                self.advance();
+                if self.current_char == ':' {
+                    self.advance();
+                    self.make_token(TokenKind::COLONCOLON)
+                } else {
+                    self.make_token(TokenKind::COLON)
+                }
             }
             c if c.is_digit(10) => self.integer(),
             c if is_ident_starter(c) => self.ident_or_keyword(),

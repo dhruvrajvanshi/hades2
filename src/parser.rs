@@ -2,8 +2,8 @@ use std::array;
 use std::{path::PathBuf, rc::Rc};
 
 use crate::ast::{
-    Block, Expr, ExprKind, Fn, Ident, Item, ItemKind, NodeId, SourceFile, Stmt, StmtKind, Ty,
-    TyKind, Var, Visibility,
+    Block, Expr, ExprKind, Fn, ForeignItem, ForeignItemKind, ForeignMod, Ident, Item, ItemKind,
+    Lit, LitKind, NodeId, Param, SourceFile, Stmt, StmtKind, Ty, TyKind, Var, Visibility,
 };
 use crate::lexer::{Lexer, Token, TokenKind};
 
@@ -13,6 +13,7 @@ pub struct Parser<'text> {
 }
 
 use libsyntax::{HasSpan, Meta, Span};
+use t::*;
 use TokenKind as t;
 impl<'text> Parser<'text> {
     pub fn new(text: &'text str, path: PathBuf) -> Self {
@@ -37,53 +38,135 @@ impl<'text> Parser<'text> {
 
     fn parse_item(&mut self) -> Item {
         use t::*;
-        let visibility = self.parse_visibility();
+        let (vis, vis_token) = self.parse_visibility();
         match self.current_kind() {
             FN => {
                 let (func, name) = self.parse_fn();
+                let start = vis_token
+                    .map(|it| *it.span())
+                    .unwrap_or_else(|| *func.span());
                 Item {
-                    meta: func.meta,
+                    meta: Meta {
+                        span: Span::between(&start, &func),
+                    },
                     name,
-                    visibility,
+                    vis,
                     kind: ItemKind::Fn(Box::new(func)),
                 }
             }
-            _ => todo!(),
+            EXTERN => {
+                let (start, foreign_mod, rbrace) = self.parse_foreign_mod();
+                Item {
+                    meta: Meta {
+                        span: Span::between(&start, &rbrace),
+                    },
+                    name: "extern".to_string(),
+                    vis,
+                    kind: ItemKind::ForeignMod(foreign_mod),
+                }
+            }
+            _ => todo!(
+                "Unexpected token while parsing item: {:?}",
+                self.current_kind()
+            ),
         }
     }
 
-    fn parse_visibility(&mut self) -> Visibility {
+    fn parse_foreign_mod(&mut self) -> (Token, ForeignMod, Token) {
+        let start = self.expect(EXTERN, "Parsing foreign mod");
+        self.expect(LBRACE, "Parsing foreign mod");
+        let mut items = vec![];
+        while !self.at(RBRACE) && !self.at(EOF) {
+            items.push(self.parse_foreign_item());
+        }
+        let rbrace = self.expect(RBRACE, "Unexpected eof when parsing foreign mod");
+        (start, ForeignMod { items }, rbrace)
+    }
+
+    fn parse_foreign_item(&mut self) -> ForeignItem {
+        let (visibility, vis_token) = self.parse_visibility();
+        let (f, name) = self.parse_fn();
+        let start = vis_token.map(|it| *it.span()).unwrap_or_else(|| *f.span());
+        ForeignItem {
+            meta: Meta {
+                span: Span::between(&start, &f),
+            },
+            name,
+            vis: visibility,
+            kind: ForeignItemKind::Fn(f),
+        }
+    }
+
+    fn at(&self, kind: TokenKind) -> bool {
+        self.current_kind() == kind
+    }
+
+    fn parse_visibility(&mut self) -> (Visibility, Option<Token>) {
         match self.current_kind() {
             t::PUB => {
-                self.advance();
-                Visibility::Public
+                let token = self.advance();
+                (Visibility::Public, Some(token))
             }
-            _ => Visibility::Inherited,
+            _ => (Visibility::Inherited, None),
         }
     }
 
     fn parse_fn(&mut self) -> (Fn, Ident) {
         let start = self.expect(TokenKind::FN, "Trying to parse function");
         let name = self.expect(TokenKind::IDENT, "fn [name]").text;
-        self.expect(TokenKind::LPAREN, "Expected parameter list start");
-        self.expect(TokenKind::RPAREN, "Expected parameter list end");
+        let (params, rparen) = self.parse_params();
         let return_ty = if self.current_kind() == TokenKind::ARROW {
             self.advance();
             Some(self.parse_ty())
         } else {
             None
         };
-        let body = self.parse_block_expr();
+        let body = if self.at(LBRACE) {
+            Some(self.parse_block_expr())
+        } else {
+            self.expect(SEMI, "Expected a semicolon after a function without a body");
+            None
+        };
+        let end = body
+            .as_ref()
+            .map(|it| *it.span())
+            .or(return_ty.as_ref().map(|it| *it.span()))
+            .unwrap_or(*rparen.span());
         (
             Fn {
                 meta: Meta {
-                    span: Span::between(&start, &body),
+                    span: Span::between(&start, &end),
                 },
-                body,
+                body: body.map(|it| Box::new(it)),
+                params,
                 return_ty,
             },
             name,
         )
+    }
+
+    /// Returns the closing parenthesis token along with the parameters
+    fn parse_params(&mut self) -> (Vec<Param>, Token) {
+        self.expect(LPAREN, "Expected parameter list start");
+
+        let mut params = vec![];
+
+        while !self.at(RPAREN) && !self.eof() {
+            let name = self.expect(IDENT, "Expected parameter name");
+            self.expect(COLON, "Expected parameter type separator");
+            let ty = self.parse_ty();
+            params.push(Param {
+                meta: Meta {
+                    span: Span::between(&name, &ty),
+                },
+                name: name.text,
+                ty,
+            });
+        }
+
+        let rparen = self.expect(TokenKind::RPAREN, "Expected parameter list end");
+
+        (params, rparen)
     }
 
     fn parse_block(&mut self) -> Block {
@@ -131,7 +214,7 @@ impl<'text> Parser<'text> {
     }
 
     fn parse_expr(&mut self) -> Expr {
-        match self.current_kind() {
+        let head = match self.current_kind() {
             TokenKind::IDENT => {
                 let token = self.advance();
                 Expr {
@@ -161,16 +244,69 @@ impl<'text> Parser<'text> {
                     kind: ExprKind::Block(block),
                 }
             }
-            _ => todo!("Unexpected token while parsing expression"),
+            INT => {
+                let token = self.advance();
+                Expr {
+                    meta: Meta {
+                        span: *token.span(),
+                    },
+                    kind: ExprKind::Lit(Lit {
+                        kind: LitKind::Integer,
+                        text: token.text,
+                    }),
+                }
+            }
+            k => todo!("Unexpected token while parsing expression: {:?}", k),
+        };
+        self.parse_expr_tail(head)
+    }
+
+    fn parse_expr_tail(&mut self, head: Expr) -> Expr {
+        match self.current_kind() {
+            LPAREN => {
+                self.advance();
+                let mut exprs = vec![];
+                while self.current_kind() != RPAREN && self.current_kind() != EOF {
+                    exprs.push(self.parse_expr());
+                }
+                let end = self.expect(
+                    RPAREN,
+                    "Unexpected EOF while trying to parse call arguments",
+                );
+                Expr {
+                    meta: Meta {
+                        span: Span::between(&head, &end),
+                    },
+                    kind: ExprKind::Call(Box::new(head), exprs),
+                }
+            }
+            _ => head,
         }
     }
 
     fn parse_ty(&mut self) -> Ty {
-        self.expect(TokenKind::LPAREN, "Trying to parse unit type");
-        self.expect(TokenKind::RPAREN, "Trying to parse end of unit type");
-        Ty {
-            id: self.node_id(),
-            kind: TyKind::Unit,
+        match self.current_kind() {
+            LPAREN => {
+                let start = self.expect(TokenKind::LPAREN, "Trying to parse unit type");
+
+                let end = self.expect(TokenKind::RPAREN, "Trying to parse end of unit type");
+                Ty {
+                    meta: Meta {
+                        span: Span::between(&start, &end),
+                    },
+                    kind: TyKind::Tup(vec![]),
+                }
+            }
+            IDENT => {
+                let token = self.advance();
+                Ty {
+                    meta: Meta {
+                        span: *token.span(),
+                    },
+                    kind: TyKind::Var(token.text),
+                }
+            }
+            _ => todo!("Parsing type"),
         }
     }
 
