@@ -1,4 +1,4 @@
-use super::{Block, Expr, ExprKind, Fn, Item, Stmt};
+use super::{Block, Expr, ExprKind, Fn, ForeignItem, Item, Stmt};
 
 pub trait Visitor: Sized {
     fn visit_item(&mut self, item: &Item) {
@@ -19,6 +19,10 @@ pub trait Visitor: Sized {
 
     fn visit_fn(&mut self, f: &super::Fn) {
         walk_fn(self, f)
+    }
+
+    fn visit_foreign_item(&mut self, f: &ForeignItem) {
+        walk_foreign_item(self, f)
     }
 }
 
@@ -56,14 +60,16 @@ pub fn walk_item(visitor: &mut impl Visitor, item: &Item) {
     use super::ItemKind as I;
     match &item.kind {
         I::Fn(f) => visitor.visit_fn(&f),
-        I::ForeignMod(_) => todo!(),
+        I::ForeignMod(f) => {
+            walk_list!(visitor, visit_foreign_item, &f.items);
+        }
     }
 }
 
 pub fn walk_stmt(visitor: &mut impl Visitor, stmt: &Stmt) {
     use super::StmtKind as S;
     match &stmt.kind {
-        S::Expr(expr) => todo!(),
+        S::Expr(expr) => visitor.visit_expr(expr),
         S::Semi => {}
     }
 }
@@ -71,5 +77,12 @@ pub fn walk_stmt(visitor: &mut impl Visitor, stmt: &Stmt) {
 pub fn walk_fn(visitor: &mut impl Visitor, f: &Fn) {
     if let Some(body) = &f.body {
         visitor.visit_expr(body);
+    }
+}
+
+pub fn walk_foreign_item(visitor: &mut impl Visitor, f: &ForeignItem) {
+    use super::ForeignItemKind as F;
+    match &f.kind {
+        F::Fn(f) => visitor.visit_fn(f),
     }
 }

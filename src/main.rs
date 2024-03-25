@@ -1,6 +1,7 @@
 mod ast;
 mod cli;
 mod lexer;
+mod lower;
 mod parser;
 use anyhow::Result;
 use ron::{self, ser::PrettyConfig};
@@ -22,6 +23,8 @@ fn main() -> Result<()> {
         "{}",
         ron::ser::to_string_pretty(&source_file, PrettyConfig::new()).unwrap(),
     );
+
+    lower::lower_source_file(source_file);
 
     panic!();
 }
