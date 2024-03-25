@@ -12,8 +12,6 @@ pub struct SourceFile {
     pub path: PathBuf,
     pub items: Vec<Item>,
 }
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Serialize)]
-pub struct NodeId(pub usize);
 
 #[derive(Debug, Serialize, HasMeta)]
 pub struct Item {
@@ -112,7 +110,6 @@ pub struct Stmt {
 
 #[derive(Debug, Serialize)]
 pub enum StmtKind {
-    Item(Item),
     Semi,
     Expr(Box<Expr>),
 }

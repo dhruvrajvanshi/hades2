@@ -63,7 +63,6 @@ pub fn walk_item(visitor: &mut impl Visitor, item: &Item) {
 pub fn walk_stmt(visitor: &mut impl Visitor, stmt: &Stmt) {
     use super::StmtKind as S;
     match &stmt.kind {
-        S::Item(item) => todo!(),
         S::Expr(expr) => todo!(),
         S::Semi => {}
     }

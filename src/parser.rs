@@ -3,7 +3,7 @@ use std::{path::PathBuf, rc::Rc};
 
 use crate::ast::{
     Block, Expr, ExprKind, Fn, ForeignItem, ForeignItemKind, ForeignMod, Ident, Item, ItemKind,
-    Lit, LitKind, NodeId, Param, SourceFile, Stmt, StmtKind, Ty, TyKind, Var, Visibility,
+    Lit, LitKind, Param, SourceFile, Stmt, StmtKind, Ty, TyKind, Var, Visibility,
 };
 use crate::lexer::{Lexer, Token, TokenKind};
 
@@ -312,10 +312,6 @@ impl<'text> Parser<'text> {
 
     fn eof(&self) -> bool {
         self.current_kind() == TokenKind::EOF
-    }
-
-    fn node_id(&mut self) -> NodeId {
-        NodeId(0)
     }
 
     fn expect(&mut self, kind: TokenKind, message: &str) -> Token {

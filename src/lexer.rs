@@ -89,13 +89,6 @@ impl<'chars> Lexer<'chars> {
         }
     }
 
-    pub fn line(&self) -> usize {
-        self.line
-    }
-    pub fn column(&self) -> usize {
-        self.column
-    }
-
     pub fn next_token(&mut self) -> Token {
         self.skip_whitespace();
         self.start_token();
