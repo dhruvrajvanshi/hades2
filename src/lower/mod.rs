@@ -1,4 +1,4 @@
-use crate::ast::{self, visit::Visitor, SourceFile};
+use crate::ast::{self, visit::Visitor, ForeignItem, SourceFile};
 
 pub fn lower_source_file(source_file: SourceFile) {
     let buffer = String::new();
@@ -23,10 +23,26 @@ impl LowerInterfaceCtx {
         }
         self.buffer
     }
+    fn lower_foreign_fn(&mut self, item: &ForeignItem, f: &ast::Fn) {
+        let return_ty = f
+            .return_ty
+            .as_ref()
+            .map(lower_ty)
+            .unwrap_or("void".to_string());
+        assert!(f.body.is_none(), "Foreign functions cannot have bodies");
+        let name = item.name.as_str();
+        self.buffer.push_str(&return_ty);
+        self.buffer.push_str(" ");
+        self.buffer.push_str(name);
+        self.buffer.push_str("();");
+    }
 }
 impl Visitor for LowerInterfaceCtx {
-    fn visit_fn(&mut self, _f: &ast::Fn) {
-        todo!()
+    fn visit_foreign_item(&mut self, f: &ast::ForeignItem) {
+        use ast::ForeignItemKind::*;
+        match &f.kind {
+            Fn(fun) => self.lower_foreign_fn(f, fun),
+        }
     }
 }
 
@@ -46,3 +62,12 @@ impl LowerImplCtx {
     }
 }
 impl Visitor for LowerImplCtx {}
+
+fn lower_ty(ty: &ast::Ty) -> String {
+    use ast::TyKind::*;
+    match &ty.kind {
+        Tup(items) if items.is_empty() => String::from("void"),
+        Var(ident) => todo!("Cant lower type {}", ident),
+        _ => todo!(),
+    }
+}

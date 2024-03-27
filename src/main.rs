@@ -1,3 +1,4 @@
+mod analysis;
 mod ast;
 mod cli;
 mod lexer;
@@ -23,6 +24,8 @@ fn main() -> Result<()> {
         "{}",
         ron::ser::to_string_pretty(&source_file, PrettyConfig::new()).unwrap(),
     );
+
+    let _resolve_result = analysis::resolve::resolve(&source_file);
 
     lower::lower_source_file(source_file);
 
